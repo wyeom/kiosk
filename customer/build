@@ -1,0 +1,5 @@
+npm run build
+
+sleep 2
+
+cp -r ./dist $SATEY_HOME/pub/sord/cs

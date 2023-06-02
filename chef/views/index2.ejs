@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app" style="padding:20px;">
+        <h2>Session List</h2>
+        <div class="frame">
+            <div class="div0">
+                <button class="btn" @click="allSocket(); allUserIds(); lsitAllOrder();">UpdateAll</button>
+            </div>
+            <div class="div1">
+                <div class="div2 title">사용자목록</div>
+                <div class="div2" v-for="e in userlist" @click="setSelected(e.userId,e.socketId); getOrderList(e.userId)">
+                    <a href="#">{{e.userId}} / {{e.socketId}}</a>
+                </div>
+            </div>
+            <div class="div1">
+                <div class="div2 title">SocketId</div>
+                <div class="div2" v-for="e in soc_ulist" @click="setSelected(e.userId,e.socketId); getOrderList(e.userId)">
+                    <a href="#">{{e.userId}} / {{e.socketId}}</a>
+                    <div><button @click="disconnect(e.socketId)">disconnect</button></div>
+                </div>
+            </div>
+            <div class="div1">
+                <div class="div2 title">Sockets</div>
+                <div class="div2" v-for="e in socketlist" @click="setSelected('',e)">
+                    <div><a href="#">{{e}}</a></div>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <h2>Customer Table</h2>
+        <div style="display:flex; border:solid 1px #dcdcdc; padding:5px; background-color:#dcdcdc">
+            <button style="width:100px; margin-right:10px; font-size:1rem;" class="btn" v-for="e in userlist" @click="setSelected(e.userId,e.socketId); getOrderList(e.userId)">{{e.userId}}</button>
+        </div>
+        <div class="frame">
+          <div class="div0">
+              <button class="btn" @click="allSocket(); allUserIds(); lsitAllOrder();">UpdateAll</button>
+          </div>
+            <div class="div1">
+                <div class="div2 title">{{this.selected.userId}} 님에게 메시지 보내기/ ({{this.selected.socketId}})</div>
+                <div class="div2"><span>Event</span><input type="text" v-model="push_event"></div>
+                <div class="div2"><span>Message</span>
+                    <textarea v-model="push_message"></textarea>
+                </div>
+                <div class="div2"><button class="btn" @click="emit">Push</button></div>
+            </div>
+            <div class="div1">
+                <div class="div2 title"> 주문목록</div>
+                <div class="div2" v-for="item in orderList">
+                    <div @click="showItem(item)" :class="[item.status==2?'darksalmon':'red']"><a href="#">{{item.name}} {{item.trans}}</a></div>
+                    <div><button @click="doneThis(item)">조리완료</button></div>
+                </div>
+            </div>
+            <div class="div1">
+                <div class="div2 title">주문상세</div>
+                <img :src="presentingItem.img">
+                <div class="div2" v-for="key in Object.keys(presentingItem)">
+                    <span>{{key}}</span><input type="text" v-model="presentingItem[key]">
+                </div>
+            </div>
+        </div>
+        
+        <hr>
+        <h2>잔여 메뉴별 Count<span style="background-color:white; padding-left:10px;">{{aggregate()}}</span></h2>
+        <div class="frame">
+            <div class="div0">
+              <button class="btn" @click="lsitAllOrder();">lsitAllOrder</button>
+          </div>
+            <div style="width : 100px; padding:5px;" v-for="item in Object.keys(listAllOrder)">
+                <div class="div2 title" style="font-size:1.5rem;">{{item}}</div>
+                <div class="div2" v-for="e in listAllOrder[item]">
+                    <div :class="[e.status==2?'darksalmon':'red']"><a href="#" style="font-size:1.5rem;">{{e.name}}</a></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+<link href="/assets/index2.css" rel="stylesheet">
+<script src="/assets/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $axGet = (url,target)=>{
+    axios.get(url).then(e => {target=e.data});
+  }
+  const { createApp } = Vue
+  createApp({
+        data() {
+          return {
+            userlist : [],
+            soc_ulist : [],
+            socketlist : [],
+            orderList : [],
+            listAllOrder : {},
+            selected : {
+              userId : '',
+              socketId : ''
+            },
+
+            push_event:'chef-message',
+            push_message:'맛있게 드셨습니까?',
+
+            presentingItem:{},
+          }
+        },
+
+        created() {
+          console.log("ccccc")
+        },
+        mounted() {
+          this.allSocket();
+          this.allUserIds();
+          let _this = this;
+          setTimeout(()=>{
+              // 위의 socket.io.js에서 뽑아 쓴다.
+              const socket = io.connect('http://localhost:14519', { // ws:// 를 안쓰고 http를 쓴다
+                  extraHeaders: {
+                      userid: 'admin#chef'
+                  }
+              });
+                // 서버로부터 메세지 수신
+                socket.on('connection-back', function (data) {
+                  console.log(data);
+              });
+
+              socket.on('status-changed', function (data) {
+                _this.allSocket(); 
+                _this.allUserIds(); 
+                _this.lsitAllOrder();
+                _this.userlist.forEach(e=>{
+                  _this.setSelected(e.userId,e.socketId); 
+                  _this.getOrderList(e.userId)
+                })
+            });
+          },1000)
+        },
+        methods : {
+          
+          lsitAllOrder(){
+            axios.get('/admin/list/lsitAllOrder').then(e => {this.listAllOrder = e.data;})
+          },
+          allSocket(){
+            axios.get('/admin/list/allSocket').then(e => { this.socketlist = e.data; })
+          },
+          allUserIds(){
+            axios.get('/admin/list/users').then(e => {this.userlist = e.data; })
+            axios.get('/admin/list/sockets').then(e => { this.soc_ulist = e.data; })
+          },
+          getOrderList(id){
+            axios.get('/admin/list/order/'+id).then(e => {this.orderList = e.data;})
+          },
+
+          setSelected(userId,socketId){
+            this.selected.userId = userId
+            this.selected.socketId = socketId
+          },
+
+          doneThis(item){
+            
+            let param = {
+              userId : this.selected.userId,
+              trans  : item.trans,
+              status : 2,
+            }
+            axios.post('/admin/order/doneThis',param).then(e => {
+              this.getOrderList(this.selected.userId)
+            })
+          },
+
+          showItem(item){
+            this.presentingItem = item;
+            //console.log("📜 : showItem : item", item)
+          },
+          emit(){ 
+            let pushData = {
+                id:this.selected.userId,
+                eventName:this.push_event ,
+                message:this.push_message ,
+            }
+            axios.post('/admin/emit',pushData).then(e => {
+              console.log("🚀 ~ file: index.ejs ~ line 225 ~ axios.get ~ e", e)
+            })
+          },
+
+          disconnect(id){ 
+            axios.post('/admin/disconnect',{id:id}).then(e => {
+              console.log("🚀 ~ file: index.ejs ~ line 225 ~ axios.get ~ e", e)
+              this.allSocket();
+              this.allUserIds();
+            })
+          },
+
+          aggregate(){
+            let notYet = {};
+            for(item of Object.keys(this.listAllOrder)){
+              this.listAllOrder[item].forEach(e=>{
+                if(e.status == 1){
+                  notYet[e.name] ??= 0;
+                  notYet[e.name]++;
+                }
+              })
+            }
+            return notYet
+          }
+
+        }
+      }).mount('#app')
+
+    </script>
+      
